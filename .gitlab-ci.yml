@@ -1,0 +1,19 @@
+image:
+  name: certbot/certbot
+  entrypoint: [""]
+
+deploy:
+  stage: deploy
+  variables:
+    # ACME_URL: "https://acme-staging-v02.api.letsencrypt.org/directory"
+    ACME_URL: "https://acme-v02.api.letsencrypt.org/directory"
+  before_script:
+    - apk add curl
+  script:
+    - 'curl --location --header "PRIVATE-TOKEN: $GITLAB_ACCESS_TOKEN" -o artifact.zip --silent "https://gitlab.com/$CI_PROJECT_PATH/-/jobs/artifacts/master/raw/artifact.zip?job=deploy"'
+    - openssl enc -aes-256-cbc -d -pass env:ENCRYPT_ARTIFACT_SECRET -in artifact.zip | tar xzvC /
+    - certbot certonly --manual --preferred-challenges dns-01 -m $ACME_EMAIL --manual-public-ip-logging-ok --agree-tos --no-bootstrap --non-interactive --manual-auth-hook './src/authenticate.sh' --manual-cleanup-hook './src/cleanup.sh' --deploy-hook './src/habitat.sh' --domains *.$DOMAIN --cert-name $DOMAIN --server $ACME_URL
+    - tar -zc /etc/letsencrypt/ | openssl enc -aes-256-cbc -out artifact.zip -pass env:ENCRYPT_ARTIFACT_SECRET
+  artifacts:
+    paths:
+      - artifact.zip
